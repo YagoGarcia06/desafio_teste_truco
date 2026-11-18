@@ -693,4 +693,17 @@ describe('Erros de jogada', () => {
     expect(p.estado().encerrada).toBe(true);
     expect(() => p.decidirMaoDeOnze(0, 'jogar')).toThrow(/partida está encerrada/);
   });
+
+  test('CT-ERRO-18: jogar sem informar a carta gera erro e nada muda', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    expect(() => p.jogar(0, undefined)).toThrow(/carta não informada/);
+    expect(() => p.jogar(0, null)).toThrow(/carta não informada/);
+    expect(p.verCartas(0, 0)).toHaveLength(3);
+    expect(p.estado().vez).toBe(0);
+  });
+
+  test('CT-ERRO-19: distribuicoes que não é lista gera erro', () => {
+    expect(() => new Partida({ distribuicoes: 5 })).toThrow(/distribuicoes deve ser uma lista/);
+    expect(() => new Partida({ distribuicoes: BASE() })).toThrow(/distribuicoes deve ser uma lista/);
+  });
 });
