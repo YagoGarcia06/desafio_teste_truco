@@ -8,9 +8,9 @@ const {
   validarJogador,
   validarDistribuicao,
 } = require('./baralho');
-const { resolverRodada } = require('./rodada');
+const { duplaDe, resolverRodada } = require('./rodada');
 const { resultadoMao } = require('./mao');
-const { criarAposta } = require('./aposta');
+const { criarAposta, pedirAumento, responder } = require('./aposta');
 
 const PONTOS_PARA_VENCER = 12;
 
@@ -70,6 +70,9 @@ class Partida {
     validarJogador(jogador, 'jogador');
     this.verificarVez(jogador);
     const { mao } = this;
+    if (mao.aposta.pendente) {
+      throw new Error('há pedido de aumento pendente: responda antes de jogar');
+    }
     const indice = this.indiceDaCarta(jogador, carta);
     if (coberta && mao.resultados.length === 0) {
       throw new Error('não é permitido cobrir carta na 1ª rodada');
@@ -79,6 +82,26 @@ class Partida {
     mao.vez = proximoJogador(jogador);
     if (mao.jogadas.length === JOGADORES) {
       this.fecharRodada();
+    }
+    return this.estado();
+  }
+
+  pedirAumento(jogador) {
+    this.verificarAndamento();
+    validarJogador(jogador, 'jogador');
+    this.verificarVez(jogador);
+    this.mao.aposta = pedirAumento(this.mao.aposta, duplaDe(jogador));
+    return this.estado();
+  }
+
+  responder(jogador, resposta) {
+    this.verificarAndamento();
+    validarJogador(jogador, 'jogador');
+    const { aposta, correu } = responder(this.mao.aposta, duplaDe(jogador), resposta);
+    if (correu) {
+      this.encerrarMao(correu.vencedor, correu.pontos);
+    } else {
+      this.mao.aposta = aposta;
     }
     return this.estado();
   }
