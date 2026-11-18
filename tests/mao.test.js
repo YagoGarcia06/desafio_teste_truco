@@ -31,10 +31,10 @@ describe('Mão ainda em andamento', () => {
   test.each([
     ['CT-MAO-16', 'nenhuma rodada jogada', []],
     ['CT-MAO-17', 'só a 1ª rodada, com vencedor', [0]],
-    ['CT-MAO-18', 'só a 1ª rodada, empatada', [E]],
+    ['CT-MAO-18', 'só a 1ª rodada empatada', [E]],
     ['CT-MAO-19', 'uma rodada para cada dupla', [0, 1]],
     ['CT-MAO-20', 'duas rodadas empatadas', [E, E]],
-  ])('%s: %s ainda não decide a mão', (_id, _descricao, resultados) => {
+  ])('%s: a mão continua em aberto com %s', (_id, _descricao, resultados) => {
     expect(resultadoMao(resultados)).toEqual({ encerrada: false, vencedor: null });
   });
 });

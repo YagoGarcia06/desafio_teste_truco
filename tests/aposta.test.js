@@ -72,7 +72,7 @@ describe('Respostas em cada nível', () => {
     ['CT-APOSTA-13', 6, 3],
     ['CT-APOSTA-14', 9, 6],
     ['CT-APOSTA-15', 12, 9],
-  ])('%s: correr do pedido de %i dá %i ponto(s) a quem pediu e encerra a mão', (_id, valor, pontos) => {
+  ])('%s: correr do pedido de %i encerra a mão e dá %i a quem pediu', (_id, valor, pontos) => {
     const { aposta, pediu } = chegarAoPedido(valor);
     const r = responder(aposta, 1 - pediu, 'correr');
     expect(r.correu).toEqual({ vencedor: pediu, pontos });
