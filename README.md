@@ -68,7 +68,7 @@ O projeto implementa somente a lógica do jogo (sem interface) e uma suíte de t
 - **Primeiro aumento da mão:** pode ser pedido por qualquer dupla (pelo jogador da vez); a restrição da regra 18 vale depois do primeiro aceite.
 - **Mão de onze:** qualquer jogador da dupla com 11 decide pela dupla; até a decisão ninguém joga carta. Carta coberta continua permitida nessa mão.
 - **Mão em que as três rodadas empatam (fora da mão de ferro):** ninguém pontua e começa a próxima mão.
-- **Como jogar uma carta:** informando a carta (`{ valor, naipe }`) ou a posição dela na mão do jogador (0, 1 ou 2). Na mão de ferro, como ninguém vê as cartas, joga-se pela posição.
+- **Como jogar uma carta:** informando a carta (`{ valor, naipe }`) ou a posição dela na mão do jogador (0, 1 ou 2). Na mão de ferro, como ninguém vê as cartas, a forma natural é pela posição; o objeto da carta também é aceito. Jogar sem informar a carta gera erro.
 - **Placar inicial:** a partida aceita a opção `placarInicial` (dois inteiros de 0 a 11, padrão `[0, 0]`), usada para montar diretamente cenários de mão de onze e mão de ferro.
 - **Ver cartas:** `verCartas(observador, dono)` devolve as cartas do dono se o observador puder vê-las e gera erro caso contrário.
 
@@ -91,7 +91,7 @@ npm run coverage  # roda os testes e gera o relatório de cobertura em coverage/
 - **Aleatoriedade controlada:** o embaralhamento usa `criarRng(semente)` (mulberry32) ou um `rng` injetado; a maior parte dos testes de partida injeta a distribuição exata das cartas (`distribuicoes`) para que cada rodada tenha resultado conhecido. Há uma partida completa até 12 com distribuição injetada (CT-PARTIDA-26) e outra só com semente (CT-PARTIDA-27).
 - **Independência:** cada teste monta a própria partida ou o próprio cenário.
 
-Total: **183 casos de teste**.
+Total: **189 casos de teste**.
 
 ### `src/baralho.js` e `src/rng.js` — `tests/baralho.test.js` (26 casos)
 
@@ -232,7 +232,7 @@ Total: **183 casos de teste**.
 | CT-APOSTA-27 | Com doze aceito não há novo pedido | Erro "acima de 12" |
 | CT-APOSTA-28 | Rejeita dupla diferente de 0 e 1 | Erro "dupla inválida" |
 
-### `src/partida.js` — `tests/partida.test.js` (69 casos)
+### `src/partida.js` — `tests/partida.test.js` (75 casos)
 
 | ID | O que testa | Resultado esperado |
 |----|-------------|--------------------|
@@ -265,6 +265,8 @@ Total: **183 casos de teste**.
 | CT-PARTIDA-27 | Partida completa só com rng termina com uma dupla em 12 | Partida encerrada, vencedor com 12 e perdedor com menos de 12 |
 | CT-PARTIDA-28 | Partida criada sem opções usa os valores padrão | Placar [0, 0], vez 0, mão normal |
 | CT-PARTIDA-29 | Placar inicial pode ser injetado | Placar [10, 4] e mão normal |
+| CT-PARTIDA-30 | Depois de um truco aceito, a mão seguinte volta a valer 1 e libera os pedidos | Placar [3, 0]; na mão seguinte valor 1, sem pedido pendente, e a dupla 0 (que não aceitou o truco) pede truco normalmente |
+| CT-PARTIDA-31 | Truco aceito vencido com 10 pontos leva o placar a 12, sem passar | Placar [12, 0] (10 + 3 limitado a 12), partida encerrada com vencedor dupla 0 |
 | CT-ONZE-01 | Só a dupla 0 com 11 pontos: a mão é de onze e aguarda a decisão dela | Tipo "onze", aguardando decisão, dupla com 11 = 0 |
 | CT-ONZE-02 | Os parceiros com 11 veem as cartas um do outro; os adversários não | 0 e 2 veem as cartas um do outro; 1 e 3 não; ninguém vê adversário |
 | CT-ONZE-03 | Se a dupla jogar, a mão vale 3 (adversário vence e marca 3) | Valor 3 e placar [11, 10] |
@@ -278,12 +280,14 @@ Total: **183 casos de teste**.
 | CT-ONZE-11 | Com a dupla 1 em 11, os jogadores 1 e 3 decidem e veem as cartas um do outro | Dupla 1 decide, 1 vê as cartas do 3, 0 não vê as do 2; correr dá [6, 11] |
 | CT-ONZE-12 | Correr da mão de onze com o adversário em 10 leva à mão de ferro | Placar [11, 11] e próxima mão de ferro |
 | CT-ONZE-13 | Na mão de onze a carta coberta continua permitida a partir da 2ª rodada | Resultados [0, 1] com cartas cobertas na 2ª rodada |
+| CT-ONZE-14 | O adversário com 10 que vence a mão de onze chega a 12, sem passar | Placar [11, 12] (10 + 3 limitado a 12), partida encerrada com vencedor dupla 1 |
 | CT-FERRO-01 | Com 11 a 11 a mão é de ferro, vale 1 e não espera decisão | Tipo "ferro", valor 1, sem decisão pendente |
 | CT-FERRO-02 | Ninguém vê as próprias cartas nem as do parceiro | Erro "não pode ver as cartas" mesmo para a própria mão |
-| CT-FERRO-03 | Jogando pela posição, quem vence a mão vence a partida | Placar [12, 11], partida encerrada, vencedor dupla 0 |
+| CT-FERRO-03 | Jogando pela posição, quem vence a mão vence a partida | Última mão vale 1 ponto, placar [12, 11], partida encerrada, vencedor dupla 0 |
 | CT-FERRO-04 | Não há pedido de aumento | Erro "não há aumento na mão de ferro" |
 | CT-FERRO-05 | Não há carta coberta, nem a partir da 2ª rodada | Erro "mão de ferro" |
 | CT-FERRO-06 | Se as três rodadas empatarem, joga-se outra mão de ferro | Placar continua [11, 11], nova mão de ferro com carteador 0 |
+| CT-FERRO-07 | Se a dupla 1 vence a mão de ferro, ela vence a partida | Última mão vale 1 ponto, placar [11, 12], partida encerrada, vencedor dupla 1 |
 | CT-COBERTA-01 | Cobrir carta na 1ª rodada gera erro e nada muda | Erro "1ª rodada", mão com 3 cartas e vez inalterada |
 | CT-COBERTA-02 | Na 2ª rodada a carta coberta é aceita e perde para qualquer carta aberta | Resultados [0, 1]: a dupla 1 vence com J contra cartas cobertas |
 | CT-COBERTA-03 | Na 3ª rodada também é possível cobrir | Placar [0, 1] |
@@ -305,6 +309,8 @@ Total: **183 casos de teste**.
 | CT-ERRO-15 | Agir com a partida encerrada gera erro | Erro "partida está encerrada" para jogar, pedir e responder |
 | CT-ERRO-16 | Placar inicial inválido gera erro | Erro "placar inicial inválido" |
 | CT-ERRO-17 | Decidir a mão de onze com a partida encerrada gera erro | Erro "partida está encerrada" |
+| CT-ERRO-18 | Jogar sem informar a carta gera erro e nada muda | Erro "carta não informada" para `undefined` e `null`, mão e vez inalteradas |
+| CT-ERRO-19 | Distribuicoes que não é lista gera erro | Erro "distribuicoes deve ser uma lista" para número e objeto |
 
 ## Cobertura
 
