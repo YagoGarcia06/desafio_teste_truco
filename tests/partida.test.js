@@ -361,6 +361,18 @@ describe('Partida completa', () => {
     p.pedirAumento(2);
     expect(p.estado().pedidoPendente).toEqual({ valor: 3, dupla: 0 });
   });
+
+  test('CT-PARTIDA-31: truco aceito vencido com 10 pontos leva o placar a 12, sem passar', () => {
+    const p = new Partida({ placarInicial: [10, 0], distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    p.responder(1, 'aceitar');
+    jogarCartas(p, VITORIA_DUPLA_0);
+    const e = p.estado();
+    expect(e.placar).toEqual([12, 0]);
+    expect(e.ultimaMao).toEqual({ vencedor: 0, pontos: 3 });
+    expect(e.encerrada).toBe(true);
+    expect(e.vencedor).toBe(0);
+  });
 });
 
 describe('Mão de onze', () => {
@@ -461,6 +473,17 @@ describe('Mão de onze', () => {
     p.decidirMaoDeOnze(0, 'jogar');
     jogarCartas(p, ['3p', '7o', '4p', '6c', '2p*', '6o', 'Qc*', 'Jc']);
     expect(p.estado().resultadosRodadas).toEqual([0, 1]);
+  });
+
+  test('CT-ONZE-14: o adversário com 10 que vence a mão de onze chega a 12, sem passar', () => {
+    const p = onze([11, 10]);
+    p.decidirMaoDeOnze(0, 'jogar');
+    jogarCartas(p, VITORIA_DUPLA_1);
+    const e = p.estado();
+    expect(e.placar).toEqual([11, 12]);
+    expect(e.ultimaMao).toEqual({ vencedor: 1, pontos: 3 });
+    expect(e.encerrada).toBe(true);
+    expect(e.vencedor).toBe(1);
   });
 });
 
