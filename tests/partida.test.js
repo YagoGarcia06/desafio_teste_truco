@@ -346,6 +346,21 @@ describe('Partida completa', () => {
     expect(e.placar).toEqual([10, 4]);
     expect(e.tipoMao).toBe('normal');
   });
+
+  test('CT-PARTIDA-30: depois de um truco aceito, a mão seguinte volta a valer 1 e libera os pedidos', () => {
+    const p = new Partida({ distribuicoes: [BASE(), BASE()] });
+    p.pedirAumento(0);
+    p.responder(1, 'aceitar');
+    jogarCartas(p, VITORIA_DUPLA_0);
+    const e = p.estado();
+    expect(e.placar).toEqual([3, 0]);
+    expect(e.maosJogadas).toBe(1);
+    expect(e.valorMao).toBe(1);
+    expect(e.pedidoPendente).toBeNull();
+    jogarCartas(p, ['Ao']);
+    p.pedirAumento(2);
+    expect(p.estado().pedidoPendente).toEqual({ valor: 3, dupla: 0 });
+  });
 });
 
 describe('Mão de onze', () => {
@@ -471,6 +486,7 @@ describe('Mão de ferro', () => {
     jogarPrimeiras(p, 8);
     const e = p.estado();
     expect(e.placar).toEqual([12, 11]);
+    expect(e.ultimaMao).toEqual({ vencedor: 0, pontos: 1 });
     expect(e.encerrada).toBe(true);
     expect(e.vencedor).toBe(0);
   });
