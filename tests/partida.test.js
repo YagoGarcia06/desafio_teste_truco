@@ -190,6 +190,94 @@ describe('Fluxo de rodadas e mãos', () => {
   });
 });
 
+describe('Aumentos durante a mão', () => {
+  // Rodadas que dão a mão à dupla 0 com a distribuição BASE (jogador 0 começando).
+  const VITORIA_DUPLA_0 = ['3p', '7o', '4p', '6c', '2p', '6o', 'Qc', 'Jc'];
+
+  test('CT-PARTIDA-18: o jogador da vez pede truco e o pedido fica pendente', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    expect(p.estado().pedidoPendente).toEqual({ valor: 3, dupla: 0 });
+    expect(p.estado().valorMao).toBe(1);
+    expect(p.estado().vez).toBe(0);
+  });
+
+  test('CT-PARTIDA-19: truco aceito faz a mão valer 3 pontos', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    p.responder(1, 'aceitar');
+    expect(p.estado().valorMao).toBe(3);
+    jogarCartas(p, VITORIA_DUPLA_0);
+    expect(p.estado().placar).toEqual([3, 0]);
+    expect(p.estado().ultimaMao).toEqual({ vencedor: 0, pontos: 3 });
+  });
+
+  test('CT-PARTIDA-20: correr do truco dá 1 ponto a quem pediu e começa a próxima mão', () => {
+    const p = new Partida({ distribuicoes: [BASE(), BASE()] });
+    p.pedirAumento(0);
+    p.responder(1, 'correr');
+    const e = p.estado();
+    expect(e.placar).toEqual([1, 0]);
+    expect(e.ultimaMao).toEqual({ vencedor: 0, pontos: 1 });
+    expect(e.carteador).toBe(0);
+    expect(e.valorMao).toBe(1);
+    expect(e.pedidoPendente).toBeNull();
+  });
+
+  test('CT-PARTIDA-21: truco aumentado para seis e corrido dá 3 pontos a quem aumentou', () => {
+    const p = new Partida({ distribuicoes: [BASE(), BASE()] });
+    p.pedirAumento(0);
+    p.responder(3, 'aumentar');
+    expect(p.estado().pedidoPendente).toEqual({ valor: 6, dupla: 1 });
+    p.responder(2, 'correr');
+    expect(p.estado().placar).toEqual([0, 3]);
+  });
+
+  test('CT-PARTIDA-22: aumentos até doze aceitos fazem a mão valer 12 e encerram a partida', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    p.responder(1, 'aumentar');
+    p.responder(2, 'aumentar');
+    p.responder(3, 'aumentar');
+    expect(p.estado().pedidoPendente).toEqual({ valor: 12, dupla: 1 });
+    p.responder(0, 'aceitar');
+    expect(p.estado().valorMao).toBe(12);
+    jogarCartas(p, VITORIA_DUPLA_0);
+    const e = p.estado();
+    expect(e.placar).toEqual([12, 0]);
+    expect(e.encerrada).toBe(true);
+    expect(e.vencedor).toBe(0);
+  });
+
+  test('CT-PARTIDA-23: truco pedido na 2ª rodada vale para a mão inteira', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    jogarCartas(p, ['3p', '7o', '4p', '6c']);
+    p.pedirAumento(0);
+    p.responder(3, 'aceitar');
+    jogarCartas(p, ['2p', '6o', 'Qc', 'Jc']);
+    expect(p.estado().placar).toEqual([3, 0]);
+  });
+
+  test('CT-PARTIDA-24: depois do aceite só a dupla que aceitou pode pedir o próximo aumento', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    p.responder(1, 'aceitar');
+    expect(() => p.pedirAumento(0)).toThrow(/só a dupla que aceitou/);
+    jogarCartas(p, ['3p']);
+    p.pedirAumento(1);
+    expect(p.estado().pedidoPendente).toEqual({ valor: 6, dupla: 1 });
+    p.responder(2, 'aceitar');
+    expect(p.estado().valorMao).toBe(6);
+  });
+
+  test('CT-PARTIDA-25: qualquer jogador da dupla adversária responde pela dupla', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    p.responder(3, 'aceitar');
+    expect(p.estado().valorMao).toBe(3);
+  });
+});
+
 describe('Carta coberta', () => {
   test('CT-COBERTA-01: cobrir carta na 1ª rodada gera erro e nada muda', () => {
     const p = new Partida({ distribuicoes: [BASE()] });
@@ -265,5 +353,60 @@ describe('Erros de jogada', () => {
 
   test('CT-ERRO-08: semente inválida gera erro', () => {
     expect(() => new Partida({ semente: 'x' })).toThrow(/semente/);
+  });
+
+  test('CT-ERRO-09: pedir aumento fora da vez gera erro', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    expect(() => p.pedirAumento(1)).toThrow(/não é a vez/);
+    expect(() => p.pedirAumento(2)).toThrow(/não é a vez/);
+  });
+
+  test('CT-ERRO-10: ninguém joga carta com pedido pendente', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    expect(() => p.jogar(0, c('3p'))).toThrow(/pedido de aumento pendente/);
+  });
+
+  test('CT-ERRO-11: a dupla que pediu não responde o próprio pedido', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    expect(() => p.responder(2, 'aceitar')).toThrow(/dupla adversária/);
+  });
+
+  test('CT-ERRO-12: responder sem pedido pendente gera erro', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    expect(() => p.responder(1, 'aceitar')).toThrow(/não há pedido pendente/);
+  });
+
+  test('CT-ERRO-13: não há aumento acima de 12', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    p.responder(1, 'aumentar');
+    p.responder(0, 'aumentar');
+    p.responder(1, 'aumentar');
+    expect(() => p.responder(0, 'aumentar')).toThrow(/acima de 12/);
+    p.responder(0, 'aceitar');
+    jogarCartas(p, ['3p', '7o']);
+    expect(() => p.pedirAumento(2)).toThrow(/acima de 12/);
+  });
+
+  test('CT-ERRO-14: pedir aumento com pedido pendente gera erro', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    expect(() => p.pedirAumento(0)).toThrow(/pedido pendente/);
+  });
+
+  test('CT-ERRO-15: agir com a partida encerrada gera erro', () => {
+    const p = new Partida({ distribuicoes: [BASE()] });
+    p.pedirAumento(0);
+    p.responder(1, 'aumentar');
+    p.responder(0, 'aumentar');
+    p.responder(1, 'aumentar');
+    p.responder(0, 'aceitar');
+    jogarCartas(p, ['3p', '7o', '4p', '6c', '2p', '6o', 'Qc', 'Jc']);
+    expect(p.estado().encerrada).toBe(true);
+    expect(() => p.jogar(0, 0)).toThrow(/partida está encerrada/);
+    expect(() => p.pedirAumento(0)).toThrow(/partida está encerrada/);
+    expect(() => p.responder(1, 'aceitar')).toThrow(/partida está encerrada/);
   });
 });
