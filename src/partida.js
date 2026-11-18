@@ -40,6 +40,9 @@ class Partida {
   constructor({ semente = 1, rng, distribuicoes = [], carteadorInicial = 3, placarInicial = [0, 0] } = {}) {
     validarJogador(carteadorInicial, 'carteador');
     validarPlacarInicial(placarInicial);
+    if (!Array.isArray(distribuicoes)) {
+      throw new Error('distribuicoes deve ser uma lista');
+    }
     distribuicoes.forEach(validarDistribuicao);
     this.rng = rng || criarRng(semente);
     this.distribuicoes = [...distribuicoes];
@@ -184,6 +187,9 @@ class Partida {
 
   // A carta pode ser informada como objeto { valor, naipe } ou pela posição na mão.
   indiceDaCarta(jogador, carta) {
+    if (carta === undefined || carta === null) {
+      throw new Error('carta não informada');
+    }
     const mao = this.mao.maos[jogador];
     const indice = Number.isInteger(carta) ? carta : mao.findIndex((c) => cartasIguais(c, carta));
     if (indice < 0 || indice >= mao.length) {
