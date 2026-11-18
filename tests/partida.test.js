@@ -534,6 +534,18 @@ describe('Mão de ferro', () => {
     expect(e.carteador).toBe(0);
     expect(e.encerrada).toBe(false);
   });
+
+  test('CT-FERRO-07: se a dupla 1 vence a mão de ferro, ela vence a partida', () => {
+    // Mãos do DOMINIO trocadas entre as duplas: a dupla 1 fica com as quatro manilhas.
+    const d = DOMINIO();
+    const p = ferro([{ maos: [d.maos[1], d.maos[0], d.maos[3], d.maos[2]], vira: d.vira }]);
+    jogarPrimeiras(p, 8);
+    const e = p.estado();
+    expect(e.placar).toEqual([11, 12]);
+    expect(e.ultimaMao).toEqual({ vencedor: 1, pontos: 1 });
+    expect(e.encerrada).toBe(true);
+    expect(e.vencedor).toBe(1);
+  });
 });
 
 describe('Carta coberta', () => {
