@@ -13,17 +13,37 @@ const { resultadoMao } = require('./mao');
 const { criarAposta, pedirAumento, responder } = require('./aposta');
 
 const PONTOS_PARA_VENCER = 12;
+const PONTOS_MAO_DE_ONZE = 3;
+const DECISOES_ONZE = ['jogar', 'correr'];
 
 const proximoJogador = (jogador) => (jogador + 1) % JOGADORES;
 const copiarCartas = (cartas) => cartas.map((carta) => ({ ...carta }));
 
+function validarPlacarInicial(placar) {
+  const valido =
+    Array.isArray(placar) &&
+    placar.length === 2 &&
+    placar.every((p) => Number.isInteger(p) && p >= 0 && p < PONTOS_PARA_VENCER);
+  if (!valido) {
+    throw new Error('placar inicial inválido: use dois inteiros de 0 a 11');
+  }
+}
+
+function tipoDaMao([pontos0, pontos1]) {
+  const onze = PONTOS_PARA_VENCER - 1;
+  if (pontos0 === onze && pontos1 === onze) return 'ferro';
+  if (pontos0 === onze || pontos1 === onze) return 'onze';
+  return 'normal';
+}
+
 class Partida {
-  constructor({ semente = 1, rng, distribuicoes = [], carteadorInicial = 3 } = {}) {
+  constructor({ semente = 1, rng, distribuicoes = [], carteadorInicial = 3, placarInicial = [0, 0] } = {}) {
     validarJogador(carteadorInicial, 'carteador');
+    validarPlacarInicial(placarInicial);
     distribuicoes.forEach(validarDistribuicao);
     this.rng = rng || criarRng(semente);
     this.distribuicoes = [...distribuicoes];
-    this.placar = [0, 0];
+    this.placar = [...placarInicial];
     this.carteador = carteadorInicial;
     this.historico = [];
     this.encerrada = false;
@@ -45,6 +65,9 @@ class Partida {
       cartasNaMesa: mao.jogadas.map(({ jogador, carta, coberta }) =>
         coberta ? { jogador, coberta } : { jogador, carta: { ...carta }, coberta }
       ),
+      tipoMao: mao.tipo,
+      aguardandoDecisaoOnze: mao.aguardandoDecisao,
+      duplaOnze: mao.duplaOnze,
       valorMao: mao.aposta.valor,
       pedidoPendente: mao.aposta.pendente ? { ...mao.aposta.pendente } : null,
       maosJogadas: this.historico.length,
@@ -70,10 +93,16 @@ class Partida {
     validarJogador(jogador, 'jogador');
     this.verificarVez(jogador);
     const { mao } = this;
+    if (mao.aguardandoDecisao) {
+      throw new Error('aguardando a decisão da mão de onze');
+    }
     if (mao.aposta.pendente) {
       throw new Error('há pedido de aumento pendente: responda antes de jogar');
     }
     const indice = this.indiceDaCarta(jogador, carta);
+    if (coberta && mao.tipo === 'ferro') {
+      throw new Error('não é permitido cobrir carta na mão de ferro');
+    }
     if (coberta && mao.resultados.length === 0) {
       throw new Error('não é permitido cobrir carta na 1ª rodada');
     }
@@ -90,6 +119,9 @@ class Partida {
     this.verificarAndamento();
     validarJogador(jogador, 'jogador');
     this.verificarVez(jogador);
+    if (this.mao.tipo !== 'normal') {
+      throw new Error(`não há aumento na mão de ${this.mao.tipo}`);
+    }
     this.mao.aposta = pedirAumento(this.mao.aposta, duplaDe(jogador));
     return this.estado();
   }
@@ -106,10 +138,36 @@ class Partida {
     return this.estado();
   }
 
+  decidirMaoDeOnze(jogador, decisao) {
+    this.verificarAndamento();
+    validarJogador(jogador, 'jogador');
+    const { mao } = this;
+    if (!mao.aguardandoDecisao) {
+      throw new Error('não há decisão de mão de onze pendente');
+    }
+    if (duplaDe(jogador) !== mao.duplaOnze) {
+      throw new Error('só a dupla com 11 pontos decide a mão de onze');
+    }
+    if (!DECISOES_ONZE.includes(decisao)) {
+      throw new Error(`decisão inválida: ${decisao}`);
+    }
+    if (decisao === 'correr') {
+      this.encerrarMao(1 - mao.duplaOnze, 1);
+    } else {
+      mao.aguardandoDecisao = false;
+      mao.aposta.valor = PONTOS_MAO_DE_ONZE;
+    }
+    return this.estado();
+  }
+
   // ---------- regras internas ----------
 
+  // Mão de ferro: ninguém vê nada. Mão de onze: a dupla com 11 vê as cartas dos dois.
   podeVer(observador, dono) {
-    return observador === dono;
+    const { tipo, duplaOnze } = this.mao;
+    if (tipo === 'ferro') return false;
+    if (observador === dono) return true;
+    return tipo === 'onze' && duplaDe(observador) === duplaOnze && duplaDe(dono) === duplaOnze;
   }
 
   verificarAndamento() {
@@ -144,9 +202,14 @@ class Partida {
 
   iniciarMao() {
     const { maos, vira } = this.proximaDistribuicao();
+    const tipo = tipoDaMao(this.placar);
+    const duplaOnze = tipo === 'onze' ? this.placar.indexOf(PONTOS_PARA_VENCER - 1) : null;
     this.mao = {
       maos,
       vira,
+      tipo,
+      duplaOnze,
+      aguardandoDecisao: tipo === 'onze',
       resultados: [],
       jogadas: [],
       vez: proximoJogador(this.carteador),
