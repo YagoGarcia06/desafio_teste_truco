@@ -30,6 +30,29 @@ const EMPATES = () =>
     'Ap'
   );
 
+// Vira 4 de ouros: a dupla 0 tem as quatro manilhas e vence qualquer mão jogando a 1ª carta da mão.
+const DOMINIO = () =>
+  dist(
+    [
+      ['5p', '5c', '3p'],
+      ['6o', '6e', '7o'],
+      ['5e', '5o', '3c'],
+      ['6c', '6p', '7e'],
+    ],
+    '4o'
+  );
+
+// Rodadas que decidem a mão com a distribuição BASE e o jogador 0 começando.
+const VITORIA_DUPLA_0 = ['3p', '7o', '4p', '6c', '2p', '6o', 'Qc', 'Jc'];
+const VITORIA_DUPLA_1 = ['Ko', 'Ao', '4p', 'Jc', '7o', 'Qc', '2c', '2p'];
+
+// Joga a primeira carta da mão de cada jogador da vez, n vezes.
+function jogarPrimeiras(partida, n) {
+  for (let i = 0; i < n; i++) {
+    partida.jogar(partida.estado().vez, 0);
+  }
+}
+
 // Joga as cartas indicadas, cada uma pelo jogador da vez; '*' no fim cobre a carta.
 function jogarCartas(partida, textos) {
   for (const t of textos) {
@@ -191,9 +214,6 @@ describe('Fluxo de rodadas e mãos', () => {
 });
 
 describe('Aumentos durante a mão', () => {
-  // Rodadas que dão a mão à dupla 0 com a distribuição BASE (jogador 0 começando).
-  const VITORIA_DUPLA_0 = ['3p', '7o', '4p', '6c', '2p', '6o', 'Qc', 'Jc'];
-
   test('CT-PARTIDA-18: o jogador da vez pede truco e o pedido fica pendente', () => {
     const p = new Partida({ distribuicoes: [BASE()] });
     p.pedirAumento(0);
@@ -275,6 +295,205 @@ describe('Aumentos durante a mão', () => {
     p.pedirAumento(0);
     p.responder(3, 'aceitar');
     expect(p.estado().valorMao).toBe(3);
+  });
+});
+
+describe('Partida completa', () => {
+  test('CT-PARTIDA-26: partida completa até 12 com distribuição injetada', () => {
+    const p = new Partida({ distribuicoes: Array.from({ length: 12 }, DOMINIO) });
+    for (let mao = 1; mao <= 11; mao++) {
+      jogarPrimeiras(p, 8);
+      expect(p.estado().placar).toEqual([mao, 0]);
+    }
+    expect(p.estado().tipoMao).toBe('onze');
+    p.decidirMaoDeOnze(2, 'jogar');
+    jogarPrimeiras(p, 8);
+    const e = p.estado();
+    expect(e.placar).toEqual([12, 0]);
+    expect(e.ultimaMao).toEqual({ vencedor: 0, pontos: 3 });
+    expect(e.maosJogadas).toBe(12);
+    expect(e.encerrada).toBe(true);
+    expect(e.vencedor).toBe(0);
+  });
+
+  test('CT-PARTIDA-27: partida completa só com rng termina com uma dupla em 12', () => {
+    const p = new Partida({ semente: 2026 });
+    let passos = 0;
+    while (!p.estado().encerrada && passos < 5000) {
+      const e = p.estado();
+      if (e.aguardandoDecisaoOnze) {
+        p.decidirMaoDeOnze(e.duplaOnze, 'jogar');
+      } else {
+        p.jogar(e.vez, 0);
+      }
+      passos++;
+    }
+    const { placar, vencedor, encerrada } = p.estado();
+    expect(encerrada).toBe(true);
+    expect(placar[vencedor]).toBe(12);
+    expect(placar[1 - vencedor]).toBeLessThan(12);
+  });
+
+  test('CT-PARTIDA-28: partida criada sem opções usa os valores padrão', () => {
+    const e = new Partida().estado();
+    expect(e.placar).toEqual([0, 0]);
+    expect(e.vez).toBe(0);
+    expect(e.tipoMao).toBe('normal');
+  });
+
+  test('CT-PARTIDA-29: placar inicial pode ser injetado', () => {
+    const e = new Partida({ placarInicial: [10, 4], distribuicoes: [BASE()] }).estado();
+    expect(e.placar).toEqual([10, 4]);
+    expect(e.tipoMao).toBe('normal');
+  });
+});
+
+describe('Mão de onze', () => {
+  const onze = (placarInicial = [11, 7], distribuicoes = [BASE(), BASE()]) =>
+    new Partida({ placarInicial, distribuicoes });
+
+  test('CT-ONZE-01: só a dupla 0 com 11 pontos: a mão é de onze e aguarda a decisão dela', () => {
+    const e = onze().estado();
+    expect(e.tipoMao).toBe('onze');
+    expect(e.aguardandoDecisaoOnze).toBe(true);
+    expect(e.duplaOnze).toBe(0);
+  });
+
+  test('CT-ONZE-02: os parceiros com 11 veem as cartas um do outro; os adversários não', () => {
+    const p = onze();
+    expect(p.verCartas(0, 2)).toEqual(BASE().maos[2]);
+    expect(p.verCartas(2, 0)).toEqual(BASE().maos[0]);
+    expect(() => p.verCartas(1, 3)).toThrow(/não pode ver as cartas/);
+    expect(() => p.verCartas(0, 1)).toThrow(/não pode ver as cartas/);
+    expect(p.verCartas(3, 3)).toEqual(BASE().maos[3]);
+  });
+
+  test('CT-ONZE-03: se a dupla jogar, a mão vale 3 (adversário vence e marca 3)', () => {
+    const p = onze();
+    p.decidirMaoDeOnze(0, 'jogar');
+    expect(p.estado().valorMao).toBe(3);
+    expect(p.estado().aguardandoDecisaoOnze).toBe(false);
+    jogarCartas(p, VITORIA_DUPLA_1);
+    expect(p.estado().placar).toEqual([11, 10]);
+  });
+
+  test('CT-ONZE-04: a dupla com 11 que joga e vence chega a 12 (placar não passa de 12)', () => {
+    const p = onze();
+    p.decidirMaoDeOnze(2, 'jogar');
+    jogarCartas(p, VITORIA_DUPLA_0);
+    expect(p.estado().placar).toEqual([12, 7]);
+    expect(p.estado().vencedor).toBe(0);
+  });
+
+  test('CT-ONZE-05: se a dupla correr, o adversário marca 1 e começa a próxima mão', () => {
+    const p = onze();
+    p.decidirMaoDeOnze(0, 'correr');
+    const e = p.estado();
+    expect(e.placar).toEqual([11, 8]);
+    expect(e.ultimaMao).toEqual({ vencedor: 1, pontos: 1 });
+    expect(e.carteador).toBe(0);
+    expect(e.tipoMao).toBe('onze');
+  });
+
+  test('CT-ONZE-06: na mão de onze ninguém pode pedir aumento', () => {
+    const p = onze();
+    p.decidirMaoDeOnze(0, 'jogar');
+    expect(() => p.pedirAumento(0)).toThrow(/não há aumento na mão de onze/);
+    jogarCartas(p, ['3p']);
+    expect(() => p.pedirAumento(1)).toThrow(/não há aumento na mão de onze/);
+  });
+
+  test('CT-ONZE-07: ninguém joga antes da decisão', () => {
+    const p = onze();
+    expect(() => p.jogar(0, 0)).toThrow(/decisão da mão de onze/);
+  });
+
+  test('CT-ONZE-08: só a dupla com 11 decide', () => {
+    const p = onze();
+    expect(() => p.decidirMaoDeOnze(1, 'jogar')).toThrow(/só a dupla com 11/);
+  });
+
+  test('CT-ONZE-09: decisão diferente de jogar ou correr gera erro', () => {
+    expect(() => onze().decidirMaoDeOnze(0, 'aumentar')).toThrow(/decisão inválida/);
+  });
+
+  test('CT-ONZE-10: não há decisão fora da mão de onze nem depois de decidida', () => {
+    const normal = new Partida({ distribuicoes: [BASE()] });
+    expect(() => normal.decidirMaoDeOnze(0, 'jogar')).toThrow(/não há decisão de mão de onze/);
+    const p = onze();
+    p.decidirMaoDeOnze(0, 'jogar');
+    expect(() => p.decidirMaoDeOnze(2, 'correr')).toThrow(/não há decisão de mão de onze/);
+  });
+
+  test('CT-ONZE-11: com a dupla 1 em 11, os jogadores 1 e 3 decidem e veem as cartas um do outro', () => {
+    const p = onze([5, 11]);
+    expect(p.estado().duplaOnze).toBe(1);
+    expect(p.verCartas(1, 3)).toEqual(BASE().maos[3]);
+    expect(() => p.verCartas(0, 2)).toThrow(/não pode ver as cartas/);
+    p.decidirMaoDeOnze(3, 'correr');
+    expect(p.estado().placar).toEqual([6, 11]);
+  });
+
+  test('CT-ONZE-12: correr da mão de onze com o adversário em 10 leva à mão de ferro', () => {
+    const p = onze([11, 10]);
+    p.decidirMaoDeOnze(0, 'correr');
+    expect(p.estado().placar).toEqual([11, 11]);
+    expect(p.estado().tipoMao).toBe('ferro');
+  });
+
+  test('CT-ONZE-13: na mão de onze a carta coberta continua permitida a partir da 2ª rodada', () => {
+    const p = onze();
+    p.decidirMaoDeOnze(0, 'jogar');
+    jogarCartas(p, ['3p', '7o', '4p', '6c', '2p*', '6o', 'Qc*', 'Jc']);
+    expect(p.estado().resultadosRodadas).toEqual([0, 1]);
+  });
+});
+
+describe('Mão de ferro', () => {
+  const ferro = (distribuicoes = [BASE()]) => new Partida({ placarInicial: [11, 11], distribuicoes });
+
+  test('CT-FERRO-01: com 11 a 11 a mão é de ferro, vale 1 e não espera decisão', () => {
+    const e = ferro().estado();
+    expect(e.tipoMao).toBe('ferro');
+    expect(e.valorMao).toBe(1);
+    expect(e.aguardandoDecisaoOnze).toBe(false);
+    expect(e.duplaOnze).toBeNull();
+  });
+
+  test('CT-FERRO-02: ninguém vê as próprias cartas nem as do parceiro', () => {
+    const p = ferro();
+    expect(() => p.verCartas(0, 0)).toThrow(/não pode ver as cartas/);
+    expect(() => p.verCartas(1, 3)).toThrow(/não pode ver as cartas/);
+  });
+
+  test('CT-FERRO-03: jogando pela posição, quem vence a mão vence a partida', () => {
+    const p = ferro();
+    jogarPrimeiras(p, 8);
+    const e = p.estado();
+    expect(e.placar).toEqual([12, 11]);
+    expect(e.encerrada).toBe(true);
+    expect(e.vencedor).toBe(0);
+  });
+
+  test('CT-FERRO-04: não há pedido de aumento', () => {
+    expect(() => ferro().pedirAumento(0)).toThrow(/não há aumento na mão de ferro/);
+  });
+
+  test('CT-FERRO-05: não há carta coberta, nem a partir da 2ª rodada', () => {
+    const p = ferro();
+    jogarPrimeiras(p, 4);
+    expect(() => p.jogar(p.estado().vez, 0, { coberta: true })).toThrow(/mão de ferro/);
+  });
+
+  test('CT-FERRO-06: se as três rodadas empatarem, joga-se outra mão de ferro', () => {
+    const p = ferro([EMPATES(), BASE()]);
+    jogarPrimeiras(p, 12);
+    const e = p.estado();
+    expect(e.placar).toEqual([11, 11]);
+    expect(e.ultimaMao).toEqual({ vencedor: null, pontos: 0 });
+    expect(e.tipoMao).toBe('ferro');
+    expect(e.carteador).toBe(0);
+    expect(e.encerrada).toBe(false);
   });
 });
 
@@ -408,5 +627,19 @@ describe('Erros de jogada', () => {
     expect(() => p.jogar(0, 0)).toThrow(/partida está encerrada/);
     expect(() => p.pedirAumento(0)).toThrow(/partida está encerrada/);
     expect(() => p.responder(1, 'aceitar')).toThrow(/partida está encerrada/);
+  });
+
+  test('CT-ERRO-16: placar inicial inválido gera erro', () => {
+    expect(() => new Partida({ placarInicial: [12, 0] })).toThrow(/placar inicial inválido/);
+    expect(() => new Partida({ placarInicial: [-1, 0] })).toThrow(/placar inicial inválido/);
+    expect(() => new Partida({ placarInicial: [3] })).toThrow(/placar inicial inválido/);
+  });
+
+  test('CT-ERRO-17: decidir a mão de onze com a partida encerrada gera erro', () => {
+    const p = new Partida({ placarInicial: [11, 3], distribuicoes: [BASE()] });
+    p.decidirMaoDeOnze(0, 'jogar');
+    jogarCartas(p, VITORIA_DUPLA_0);
+    expect(p.estado().encerrada).toBe(true);
+    expect(() => p.decidirMaoDeOnze(0, 'jogar')).toThrow(/partida está encerrada/);
   });
 });
